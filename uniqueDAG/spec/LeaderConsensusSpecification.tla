@@ -228,9 +228,9 @@ Next ==
    \E p \in ProcessorSet, w \in WaveSet, E \in SUBSET(WaveSet): 
       UpdateWaveTn(p, w, E) \/ UpdateDecidedWaveTn(p, w)
 
-vars == <<commitWithRef, decidedWave, leaderReachablity, leaderSeq>>
+\*vars == <<decidedWave, commitWithRef, leaderReachablity, leaderSeq>>
 
-Spec == Init /\ [][Next]_vars
+\*Spec == Init /\ [][Next]_vars
 
 -----------------------------------------------------------------------------
 (*--------------------------SAFETY-INVARIANTS------------------------------*)

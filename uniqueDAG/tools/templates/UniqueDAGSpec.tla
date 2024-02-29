@@ -261,14 +261,15 @@ Init ==
 
 (* This means we always priorities the block submission *)
 Next == 
-      (*/\ \A p \in ProcessSet\{NumProcess} : ProcessState[p][p] >= ProcessState[p+1][p+1]
-      /\*) IF \E p \in ProcessSet : NextRoundCond(p)
+      /\ %%Constraints%%
+      /\ IF \E p \in ProcessSet : NextRoundCond(p)
          THEN \E p \in ProcessSet : NextRoundTn(p)
          ELSE \E p \in ProcessSet, q \in ProcessSet :
             AddVertexTn(p, [round |-> ProcessState[p][q]+1, source |-> q])
 
 Inv ==
-    \A p \in ProcessSet :
+    /\ %%Inv%%
+    /\ \A p \in ProcessSet :
         ProcessState[p][p] <= 10
 
 Temporal ==

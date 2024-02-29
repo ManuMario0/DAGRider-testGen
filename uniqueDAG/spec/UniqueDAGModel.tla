@@ -8,18 +8,18 @@ ChooseLeader(i) == i
 VARIABLES
     \* @type: Int -> Int -> $fullVertex;
     dag,
-    \* @type: Seq(BLOCK);
-    BlockSeq,
+    (*\* type: Seq(BLOCK);
+    BlockSeq,*)
     \* @type: Int -> Int -> Int;
-    ProcessState,
-    \* @type: Int -> Int -> Seq(Int);
-    commitWithRef,
-    \* @type: Int -> Int;
+    ProcessState
+    \* type: Int -> Int -> Seq(Int);
+    (*commitWithRef,
+    \* type: Int -> Int;
     decidedWave,
-    \* @type: Int -> Int -> {exists: Bool, edges: Set(Int)};
+    \* type: Int -> Int -> {exists: Bool, edges: Set(Int)};
     leaderReachablity,
-    \* @type: Int -> {current: Seq(Int), last: Seq(Int)};
-    leaderSeq
+    \* type: Int -> {current: Seq(Int), last: Seq(Int)};
+    leaderSeq*)
 
 INSTANCE UniqueDAGSpec WITH
     NumProcess <- 4,
@@ -27,13 +27,13 @@ INSTANCE UniqueDAGSpec WITH
     BlockSet <- Gen(5),
     ChooseLeader <- ChooseLeader,
     dag <- dag,
-    ProcessState <- ProcessState,
-    commitWithRef <- commitWithRef,
+    ProcessState <- ProcessState
+    (*commitWithRef <- commitWithRef,
     decidedWave <- decidedWave,
     leaderReachablity <- leaderReachablity,
-    leaderSeq <- leaderSeq
+    leaderSeq <- leaderSeq*)
 
 =============================================================================
 \* Modification History
-\* Last modified Wed Feb 28 15:43:13 AEDT 2024 by emmanuel
+\* Last modified Thu Feb 29 12:39:02 AEDT 2024 by emmanuel
 \* Created Wed Feb 28 08:44:58 AEDT 2024 by emmanuel
