@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>UniqueDAGProof</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>toolbox.builder.TLAParserBuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>toolbox.natures.TLANature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>LeaderConsensusSpecification.tla</name>
+			<type>1</type>
+			<location>/Users/emmanuel/Desktop/stage/2023-stage/tla+/DAGRider-testGen/uniqueDAG/proof/LeaderConsensusSpecification.tla</location>
+		</link>
+		<link>
+			<name>SequenceOps.tla</name>
+			<type>1</type>
+			<location>/Users/emmanuel/Desktop/stage/2023-stage/tla+/DAGRider-testGen/uniqueDAG/proof/SequenceOps.tla</location>
+		</link>
+		<link>
+			<name>UniqueDAGProof.tla</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/UniqueDAGProof.tla</locationURI>
+		</link>
+		<link>
+			<name>UniqueDAGSpec.tla</name>
+			<type>1</type>
+			<location>/Users/emmanuel/Desktop/stage/2023-stage/tla+/DAGRider-testGen/uniqueDAG/proof/UniqueDAGSpec.tla</location>
+		</link>
+	</linkedResources>
+</projectDescription>

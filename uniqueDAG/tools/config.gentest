@@ -1,2 +1,3 @@
+Name?Test;Count?1;NumProcess?4;NumWaves?3;Depth?500;Inv?\\A p \\in ProcessSet : ProcessState[p][p] <= 9;Constraints?ProcessState'[1][1] < 2
 Name?AtLeast9Rounds;Count?10;NumProcess?7;NumWaves?3;Depth?500;Inv?\\A p \\in ProcessSet : ProcessState[p][p] <= 9;Constraints?TRUE
 Name?AtLeast10RoundsWith22Process;Count?1;NumProcess?22;NumWaves?3;Depth?5000;Inv?\\A p \\in ProcessSet : ProcessState[p][p] <= 10;Constraints?TRUE
