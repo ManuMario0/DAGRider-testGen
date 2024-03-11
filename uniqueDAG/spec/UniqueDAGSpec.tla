@@ -48,7 +48,7 @@ ASSUME NumProcessorAsm ==
 NumFaultyProcessors == 
    (NumProcess-1) \div 3
 
-ProcessSet == 
+ProcessSet ==
    1..NumProcess
 
 -----------------------------------------------------------------------------
@@ -90,6 +90,8 @@ CONSTANT
 
 -----------------------------------------------------------------------------
 
+(*--------------------------------CONSTANTS--------------------------------*)
+
 (* Definition of the global DAG (that is, the network-view of the DAG.     *)
 
 VARIABLE
@@ -112,14 +114,14 @@ InitDag ==
 -----------------------------------------------------------------------------
 
 (* Definition of blocksToPropose                                           *)
-(*
+
 VARIABLE
     \* type: Seq(BLOCK);
     BlockSeq
     
 InitBlockSeq ==
     BlockSeq = BlockSet
-*)
+
 -----------------------------------------------------------------------------
 
 (* Definition of processState                                              *)
@@ -133,10 +135,21 @@ InitProcessState ==
 
 -----------------------------------------------------------------------------
 
+(* Strongedge head to easilly compute weakedges                             *)
+
+VARIABLE
+    \* @type: Int -> Set(Int);
+    StrongedgeHead
+
+InitStrongedgeHead ==
+    StrongedgeHead = [p \in ProcessSet |-> ProcessSet ]
+
+-----------------------------------------------------------------------------
+
 (* Since DAGRiderSpecification extends LeaderConsensusSpecification, we    *)
 (* additionally have the four variables (commitWithRef, decidedWave,       *)
 (* leaderReachablity, leaderSeq) from the LeaderConsensusSpecification.    *)
-(*
+
 VARIABLES
     \* type: Int -> Int -> Seq(Int);
     commitWithRef,
@@ -146,9 +159,9 @@ VARIABLES
     leaderReachablity,
     \* type: Int -> {current: Seq(Int), last: Seq(Int)};
     leaderSeq
-*)
+
 -----------------------------------------------------------------------------
-(*
+
 LeaderConsensus == 
    INSTANCE LeaderConsensusSpecification
    WITH NumWaves <- NumWaves,
@@ -156,7 +169,7 @@ LeaderConsensus ==
         decidedWave <- decidedWave,
         leaderReachablity <- leaderReachablity,
         leaderSeq <- leaderSeq,
-        commitWithRef <- commitWithRef*)
+        commitWithRef <- commitWithRef
 
 (*-------------------------STATE-TRANSITIONS-------------------------------*)
 
@@ -173,7 +186,7 @@ LeaderConsensus ==
 \* @type: (Int, Int) => Bool;
 CreateVertex(p, r) ==
     /\ dag' = [dag EXCEPT ![p][r] = [
-        block |-> "1_OF_BLOCK", (*Head(BlockSeq), *)
+        block |-> Head(BlockSeq),
         strongedges |->
             {[round |-> r-1, source |-> q] :
                 q \in {i \in ProcessSet : ProcessState[p][i] >= r-1}},
@@ -182,7 +195,7 @@ CreateVertex(p, r) ==
                 q \in {i \in ProcessSet : ProcessState[p][i] < r-1} },
         reachableleaders |->
             UNION { dag[q][r-1].reachableleaders :
-                q \in { i \in ProcessSet : ProcessState[p][i] >= r-1 } }
+                q \in { i \in ProcessSet \intersect StrongedgeHead[p] : ProcessState[p][i] >= r-1 } }
             \union (
                 IF (r % 4) = 1 /\ ChooseLeader((r+3) \div 4) = p
                 THEN { (r+3) \div 4 }
@@ -190,7 +203,8 @@ CreateVertex(p, r) ==
             )
         ]]
     /\ ProcessState' = [ProcessState EXCEPT ![p][p] = r]
-(*
+    /\ StrongedgeHead' = [StrongedgeHead EXCEPT ![p] = {p}]
+
 \* type: (Int, Int) => Bool;
 ReadyWave(p, w) == 
    IF ( (* Check wether the wave vertex leader is in the dag of the process *)
@@ -204,21 +218,21 @@ ReadyWave(p, w) ==
    )
    THEN LeaderConsensus!UpdateDecidedWaveTn(p, w)
    ELSE UNCHANGED <<decidedWave, commitWithRef, leaderReachablity, leaderSeq>>
-*)
+
 NextRoundCond(p) ==
     /\ ProcessState[p][p]+1 \in RoundSet
     /\ Cardinality({ q \in ProcessSet : ProcessState[p][q] >= ProcessState[p][p] })
         > 2*NumFaultyProcessors
-    (*/\ BlockSeq # <<>>*)
+    /\ BlockSeq # <<>>
 
 \* @type: Int => Bool;
 NextRoundTn(p) ==  
    /\ NextRoundCond(p)
    /\ CreateVertex(p, ProcessState[p][p]+1)
-   (*/\ BlockSeq' = Tail(BlockSeq)
+   /\ BlockSeq' = Tail(BlockSeq)
    /\ IF ProcessState[p][p]>0 /\ (ProcessState[p][p] % 4) = 0 
       THEN ReadyWave(p, (ProcessState[p][p] \div 4)) 
-      ELSE UNCHANGED <<decidedWave, commitWithRef, leaderReachablity, leaderSeq>>*)
+      ELSE UNCHANGED <<decidedWave, commitWithRef, leaderReachablity, leaderSeq>>
 
 -----------------------------------------------------------------------------
 
@@ -230,10 +244,10 @@ NextRoundTn(p) ==
 
 \* @type: (Int, $lightVertex) => Bool;
 AddVertexTn(p, v) == 
-   (* Check that the vertex is actually valid *)
-   /\ dag[v.source][v.round].block /= "NONE_OF_BLOCK"
    (* Check that the round of the vertex is less than the vertex we want *)
    /\ v.round <= ProcessState[p][p]
+   (* Check that the vertex is actually valid *)
+   /\ dag[v.source][v.round].block /= "NONE_OF_BLOCK"
    (* Check that we did not have already process this vertex *)
    /\ ProcessState[p][v.source] < v.round
    (* Check that all the vertex it is connected to are already in the local DAG *)
@@ -241,35 +255,40 @@ AddVertexTn(p, v) ==
         ProcessState[p][link.source] >= link.round
    (* Update our local view of the DAG *)
    /\ ProcessState' = [ProcessState EXCEPT ![p][v.source] = v.round]
-   (* Update our local LeaderGraph *) (*
+   (* Update the strongedge head vector *)
+   /\ StrongedgeHead' = [StrongedgeHead EXCEPT ![p] = (StrongedgeHead[p] \cup {v.source})
+        \ {q.source : q \in {i \in (dag[v.source][v.round].strongedges \cup dag[v.source][v.round].weakedges) :
+                i.round = ProcessState[p][i.source] /\ i.source # v.source}} ]
+   (* Update our local LeaderGraph *)
    /\ IF v.round % 4 = 1 /\ v.source = ChooseLeader((v.round+3) \div 4)
       THEN LeaderConsensus!UpdateWaveTn(
             p,
             (v.round+3) \div 4,
             dag[v.source][v.round].reachableleaders \ {(v.round+3) \div 4}
       )
-      ELSE UNCHANGED <<decidedWave, commitWithRef, leaderReachablity, leaderSeq>>*)
-   /\ UNCHANGED <<dag>>
+      ELSE UNCHANGED <<decidedWave, commitWithRef, leaderReachablity, leaderSeq>>
+   /\ UNCHANGED <<dag, BlockSeq>>
 
 -----------------------------------------------------------------------------
 
 Init ==
     /\ InitDag
-    (*/\ InitBlockSeq*)
+    /\ InitBlockSeq
     /\ InitProcessState
-    (*/\ LeaderConsensus!Init*)
+    /\ InitStrongedgeHead
+    /\ LeaderConsensus!Init
 
 (* This means we always priorities the block submission *)
 Next == 
       (*/\ \A p \in ProcessSet\{NumProcess} : ProcessState[p][p] >= ProcessState[p+1][p+1]
-      /\*) IF \E p \in ProcessSet : NextRoundCond(p)
+      /\*)IF \E p \in ProcessSet : NextRoundCond(p)
          THEN \E p \in ProcessSet : NextRoundTn(p)
          ELSE \E p \in ProcessSet, q \in ProcessSet :
             AddVertexTn(p, [round |-> ProcessState[p][q]+1, source |-> q])
 
 Inv ==
     \A p \in ProcessSet :
-        ProcessState[p][p] <= 10
+        ProcessState[p][p] <= 3
 
 Temporal ==
     [](\A p \in ProcessSet : ProcessState[p][p] >= ProcessState[p+1][p+1])
@@ -277,5 +296,5 @@ Temporal ==
 
 =============================================================================
 \* Modification History
-\* Last modified Thu Feb 29 13:52:06 AEDT 2024 by emmanuel
+\* Last modified Tue Mar 12 09:54:13 AEDT 2024 by emmanuel
 \* Created Wed Feb 28 08:18:24 AEDT 2024 by emmanuel
