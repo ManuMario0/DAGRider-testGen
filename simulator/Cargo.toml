@@ -1,0 +1,8 @@
+[package]
+name = "tests"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+peg = "0.8.2"
+dict = "0.1.5"

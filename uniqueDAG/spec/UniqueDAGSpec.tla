@@ -99,7 +99,7 @@ VARIABLE
     dag
     
 NoneBlock ==
-    [block |-> "NONE_OF_BLOCK",
+    [block |-> 0,\* "NONE_OF_BLOCK",
      strongedges |-> {},
      weakedges |-> {},
      reachableleaders |-> {}]
@@ -120,7 +120,7 @@ VARIABLE
     BlockSeq
     
 InitBlockSeq ==
-    BlockSeq = BlockSet
+    BlockSeq = 1\* BlockSeq = BlockSet
 
 -----------------------------------------------------------------------------
 
@@ -186,7 +186,7 @@ LeaderConsensus ==
 \* @type: (Int, Int) => Bool;
 CreateVertex(p, r) ==
     /\ dag' = [dag EXCEPT ![p][r] = [
-        block |-> Head(BlockSeq),
+        block |-> BlockSeq,\*Head(BlockSeq),
         strongedges |->
             {[round |-> r-1, source |-> q] :
                 q \in {i \in ProcessSet : ProcessState[p][i] >= r-1}},
@@ -223,13 +223,13 @@ NextRoundCond(p) ==
     /\ ProcessState[p][p]+1 \in RoundSet
     /\ Cardinality({ q \in ProcessSet : ProcessState[p][q] >= ProcessState[p][p] })
         > 2*NumFaultyProcessors
-    /\ BlockSeq # <<>>
+    /\ BlockSeq < 3
 
 \* @type: Int => Bool;
 NextRoundTn(p) ==  
    /\ NextRoundCond(p)
    /\ CreateVertex(p, ProcessState[p][p]+1)
-   /\ BlockSeq' = Tail(BlockSeq)
+   /\ BlockSeq' = BlockSeq + 1\*Tail(BlockSeq)
    /\ IF ProcessState[p][p]>0 /\ (ProcessState[p][p] % 4) = 0 
       THEN ReadyWave(p, (ProcessState[p][p] \div 4)) 
       ELSE UNCHANGED <<decidedWave, commitWithRef, leaderReachablity, leaderSeq>>
@@ -247,7 +247,7 @@ AddVertexTn(p, v) ==
    (* Check that the round of the vertex is less than the vertex we want *)
    /\ v.round <= ProcessState[p][p]
    (* Check that the vertex is actually valid *)
-   /\ dag[v.source][v.round].block /= "NONE_OF_BLOCK"
+   /\ dag[v.source][v.round].block /= 0\*"NONE_OF_BLOCK"
    (* Check that we did not have already process this vertex *)
    /\ ProcessState[p][v.source] < v.round
    (* Check that all the vertex it is connected to are already in the local DAG *)
@@ -278,12 +278,16 @@ Init ==
     /\ InitStrongedgeHead
     /\ LeaderConsensus!Init
 
-(* This means we always priorities the block submission *)
+(* This means we always priorities the block submission *) (*
 Next == 
       (*/\ \A p \in ProcessSet\{NumProcess} : ProcessState[p][p] >= ProcessState[p+1][p+1]
       /\*)IF \E p \in ProcessSet : NextRoundCond(p)
          THEN \E p \in ProcessSet : NextRoundTn(p)
          ELSE \E p \in ProcessSet, q \in ProcessSet :
+            AddVertexTn(p, [round |-> ProcessState[p][q]+1, source |-> q])*)
+Next ==
+    \/ \E p \in ProcessSet : NextRoundTn(p)
+    \/ \E p \in ProcessSet, q \in ProcessSet :
             AddVertexTn(p, [round |-> ProcessState[p][q]+1, source |-> q])
 
 Inv ==
@@ -296,5 +300,5 @@ Temporal ==
 
 =============================================================================
 \* Modification History
-\* Last modified Tue Mar 12 09:54:13 AEDT 2024 by emmanuel
+\* Last modified Tue Apr 09 15:48:01 AEST 2024 by emmanuel
 \* Created Wed Feb 28 08:18:24 AEDT 2024 by emmanuel
