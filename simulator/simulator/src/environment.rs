@@ -180,12 +180,12 @@ fn test_generate_vertex() {
 #[cfg(test)]
 #[tokio::test]
 async fn test_environment_creation() {
-    let mut file = File::open("/Volumes/Emmanuel/state.edge").unwrap();
+    let mut file = File::open("ressources/state.edge").unwrap();
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();
     let edge_parse = parser::edge_parser::file(&contents).unwrap();
 
-    file = File::open("/Volumes/Emmanuel/state.node").unwrap();
+    file = File::open("ressources/state.node").unwrap();
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();
 

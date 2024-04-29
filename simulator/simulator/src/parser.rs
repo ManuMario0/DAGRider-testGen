@@ -258,7 +258,7 @@ fn parser_state() {
 
 #[test]
 fn parse_file() -> std::io::Result<()> {
-    let mut file = File::open("/Volumes/Emmanuel/state.node")?;
+    let mut file = File::open("ressources/state.node")?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     match node_parser::file(&contents) {
@@ -329,7 +329,7 @@ fn parser_run() {
 
 #[test]
 fn parser_file_run() -> std::io::Result<()> {
-    let mut file = File::open("/Volumes/Emmanuel/state.edge")?;
+    let mut file = File::open("ressources/state.edge")?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     match edge_parser::file(&contents) {
