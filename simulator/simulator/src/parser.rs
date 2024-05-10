@@ -1,6 +1,4 @@
-use dict::{ Dict, DictIface };
-use std::fs::File;
-use std::io::prelude::*;
+use std::collections::HashMap;
 
 use peg;
 
@@ -105,16 +103,21 @@ peg::parser! {
             "dag" whitespace() "=" dag:(dag()) [^'\n']*
             { (id, TlaState {process_state, dag}) }
         
-        pub rule file() -> Dict::<TlaState>
+        pub rule file() -> HashMap::<i64, TlaState>
              = l:(state() ** "\n") whitespace() {
-                let mut d = Dict::<TlaState>::new();
+                let mut d = HashMap::<i64, TlaState>::new();
                 for x in &l {
-                    d.add( (x.0).to_string(), x.1.clone());
+                    d.insert( x.0, x.1.clone());
                 }
                 d
              }
     }
 }
+
+#[cfg(test)]
+use std::fs::File;
+#[cfg(test)]
+use std::io::Read;
 
 #[test]
 fn parser_light_vertex() {

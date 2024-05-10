@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::{format, Display, Formatter};
 use std::ops::Add;
 
+#[derive(Debug, Clone)]
 pub struct Dag {
     pub graph: BTreeMap<Round, HashMap<NodePublicKey, Vertex>>,
     min_quorum: u32,

@@ -1,17 +1,9 @@
-use dict::{Dict, DictIface};
-use model::{block::Block, committee::Committee, vertex::Vertex, DEFAULT_CHANNEL_CAPACITY};
-use std::fs::File;
-use std::io::Read;
+use std::collections::HashMap;
+use model::{block::Block, committee::Committee, vertex::Vertex};
 use std::collections::BTreeMap;
-use crate::parser;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use super::parser;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio;
-use std::io::Write;
-use std::io::stdout;
-
-use transaction::TransactionCoordinator;
-use vertex::vertex_coordinator::VertexCoordinator;
-use consensus::Consensus;
 
 pub struct Environment {
     block_channel_propose: Sender<Block>,
@@ -19,7 +11,8 @@ pub struct Environment {
     vertex_channel_deliver: Sender<Vertex>,
     process_id : u8,
     run : parser::Run,
-    states : Dict<parser::TlaState>
+    states : std::sync::Arc<HashMap<i64, parser::TlaState>>,
+    control_sender : Sender<parser::TlaState>
 }
 
 impl Environment {
@@ -28,9 +21,10 @@ impl Environment {
         vertex_channel_broadcast: Receiver<Vertex>,
         vertex_channel_deliver: Sender<Vertex>,
         run : parser::Run,
-        states : Dict<parser::TlaState>,
-        process_id : u8
-    )  -> tokio::task::JoinHandle<()> {
+        states : std::sync::Arc<HashMap<i64, parser::TlaState>>,
+        process_id : u8,
+        control_sender : Sender<parser::TlaState>
+    ) {
         tokio::spawn(async move {
             Self {
                 block_channel_propose,
@@ -38,17 +32,18 @@ impl Environment {
                 vertex_channel_deliver,
                 process_id,
                 run,
-                states
+                states,
+                control_sender
             }
             .run()
             .await;
-        })
+        });
     }
 
     async fn run(&mut self) {
-        let mut current_state  : parser::TlaState = self.states.get(&self.run.start.to_string()).unwrap().clone();
-        for (act, id_next_action) in self.run.actions.iter() {
-            let next_state : parser::TlaState = self.states.get(&id_next_action.to_string()).unwrap().clone();
+        let mut current_state  : parser::TlaState = self.states.get(&self.run.start).unwrap().clone();
+        for (act, id_next_action) in self.run.clone().actions.iter() {
+            let next_state : parser::TlaState = self.states.get(&id_next_action).unwrap().clone();
             match *act {
                 | parser::Action::AddVertex => 
                     {
@@ -91,12 +86,14 @@ impl Environment {
         }
 
         // now create the vertex that has to be added (this is the extremly tricky bit)
-        let vertex = Environment::generate_vertex(current_state, process_source, next_state.process_state[process_dest][process_source] as usize);
+        let vertex = Environment::generate_vertex(next_state, process_source, next_state.process_state[process_dest][process_source] as usize);
+
+        // print!("I added a vertex {} ; ", &vertex);
 
         // send the vertex
         self.vertex_channel_deliver.send(vertex).await.unwrap();
 
-        print!("I added a vertex ; ");
+        self.control_sender.send(current_state.clone()).await.unwrap();
     }
 
     /*
@@ -110,7 +107,7 @@ impl Environment {
         (this part is not really possible right now, what is possible is to check if the leaders are proposed in the correct order,
             which is enough if the ordering algorithm is deterministic and the same for all process, which it is)
     */
-    async fn process_next_round_action(&self, current_state : &parser::TlaState, action : &parser::Action, next_state : &parser::TlaState) {
+    async fn process_next_round_action(&mut self, current_state : &parser::TlaState, action : &parser::Action, next_state : &parser::TlaState) {
         // check which vertex has been added by running trough the process_state
         let mut process_source = 0;
         let mut process_dest = 0;
@@ -129,43 +126,66 @@ impl Environment {
         }
 
         // create block
-        let block = Environment::generate_block(next_state.dag[process_source][next_state.process_state[process_dest][process_source] as usize].block);
+        let block: Block = Environment::generate_block(next_state.dag[process_source][next_state.process_state[process_dest][process_source] as usize].block);
+
+        // print!("I went to next round {:?} ; ", block);
 
         // propose block
         self.block_channel_propose.send(block).await.unwrap();
 
+        self.control_sender.send(current_state.clone()).await.unwrap();
+
+        // TODO: check tmp here !!!!!!!!
+        let tmp = self.vertex_channel_broadcast.recv().await.unwrap();
+
+        for v in current_state.dag[process_source][next_state.process_state[process_dest][process_source] as usize].strongedges.iter() {
+            let vert = Environment::generate_vertex(current_state, v.source as usize-1, v.round as usize);
+            if !tmp.get_strong_parents().contains_key(&vert.hash()) {
+                println!("ERROR !");
+            }
+        }
+
+        for v in current_state.dag[process_source][next_state.process_state[process_dest][process_source] as usize].weakedges.iter() {
+            let vert = Environment::generate_vertex(current_state, v.source as usize-1, v.round as usize);
+            if tmp.get_strong_parents().contains_key(&vert.hash()) || !tmp.get_all_parents().contains_key(&vert.hash()) {
+                println!("ERROR !");
+            }
+        }
+
+        let vertex = Environment::generate_vertex(next_state, process_source, next_state.process_state[process_dest][process_source] as usize);
+
+        self.vertex_channel_deliver.send(vertex).await.unwrap();
+
         // check output
-        print!("I went to next round ; ");
+        self.control_sender.send(current_state.clone()).await.unwrap();
     }
 
     fn generate_block(id : u64) -> Block {
         Block::new(vec![vec![id as u8]])
     }
 
-    fn generate_vertex(current_state : &parser::TlaState, process_source : usize, round : usize) -> Vertex {
+    pub fn generate_vertex(current_state : &parser::TlaState, process_source : usize, round : usize) -> Vertex {
         // if round zero send genesis vertex hash
         if round == 0 {
-            let genesis = Vertex::genesis(Committee::default().get_nodes_keys());
-
-            return genesis.get(process_source-1).unwrap().clone()
+            return Vertex::new(Committee::default().get_node_key(process_source as u32 + 1).unwrap(), 1, Block::default(), BTreeMap::new());
         }
 
         // else we compute the hash recursively
         // get parents
         let mut parents : BTreeMap<[u8; 32], u64> = BTreeMap::new();
         for v in current_state.dag[process_source][round].strongedges.iter() {
-            let vert = Environment::generate_vertex(current_state, v.source as usize, v.round as usize);
-            parents.insert(vert.hash(), v.round);
+            let vert = Environment::generate_vertex(current_state, v.source as usize-1, v.round as usize);
+            parents.insert(vert.hash(), v.round+1);
         }
 
         for v in current_state.dag[process_source][round].weakedges.iter() {
-            let vert = Environment::generate_vertex(current_state, v.source as usize, v.round as usize);
-            parents.insert(vert.hash(), v.round);
+            let vert = Environment::generate_vertex(current_state, v.source as usize-1, v.round as usize);
+            parents.insert(vert.hash(), v.round+1);
         }
 
-        let keys = Committee::default().get_nodes_keys();
+        // let keys = Committee::default().get_nodes_keys();
 
-        Vertex::new(keys[process_source], round as u64, Environment::generate_block(current_state.dag[process_source][round].block), parents)
+        Vertex::new(Committee::default().get_node_key(process_source as u32+1).unwrap(), round as u64+1, Environment::generate_block(current_state.dag[process_source][round].block), parents)
     }
 }
 
@@ -173,54 +193,4 @@ impl Environment {
 fn test_generate_vertex() {
     let current_test = parser::TlaState {process_state : vec![], dag : vec![]};
     let _ = Environment::generate_vertex(&current_test, 3, 0);
-}
-
-
-
-#[cfg(test)]
-#[tokio::test]
-async fn test_environment_creation() {
-    let mut file = File::open("ressources/state.edge").unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-    let edge_parse = parser::edge_parser::file(&contents).unwrap();
-
-    file = File::open("ressources/state.node").unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-
-    for v in edge_parse.iter() {
-        let node_id = 0;
-
-        let node_parse = parser::node_parser::file(&contents).unwrap();
-
-        let (vertex_output_sender, vertex_output_receiver) =
-        channel::<Vertex>(DEFAULT_CHANNEL_CAPACITY);
-
-        let (vertex_to_broadcast_sender, vertex_to_broadcast_receiver) =
-            channel::<Vertex>(DEFAULT_CHANNEL_CAPACITY);
-        let (vertex_to_consensus_sender, vertex_to_consensus_receiver) =
-            channel::<Vertex>(DEFAULT_CHANNEL_CAPACITY);
-        let (block_sender, block_receiver) = channel::<Block>(DEFAULT_CHANNEL_CAPACITY);
-
-        Consensus::spawn(
-            node_id+1,
-            Committee::default(),
-            vertex_to_consensus_receiver,
-            vertex_to_broadcast_sender,
-            vertex_output_sender,
-            block_receiver,
-        );
-
-        let _ = tokio::join!(Environment::spawn(
-            block_sender, 
-            vertex_to_broadcast_receiver, 
-            vertex_to_consensus_sender,
-            v.clone(),
-            node_parse,
-            node_id as u8
-        ));
-
-        println!("Test done !");
-    }
 }

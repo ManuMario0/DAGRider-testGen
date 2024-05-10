@@ -1,5 +1,6 @@
 use log::{debug, info};
 use std::collections::HashSet;
+use std::io::Write;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use model::block::Block;
@@ -9,7 +10,7 @@ use model::{Round, Wave};
 
 use crate::state::State;
 
-mod dag;
+pub mod dag;
 mod state;
 
 const MAX_WAVE: Wave = 4;
@@ -26,6 +27,7 @@ pub struct Consensus {
     vertex_receiver: Receiver<Vertex>,
     vertex_output_sender: Sender<Vertex>,
     vertex_to_broadcast_sender: Sender<Vertex>,
+    test_sender : Sender<dag::Dag>,
 }
 
 impl Consensus {
@@ -36,6 +38,7 @@ impl Consensus {
         vertex_to_broadcast_sender: Sender<Vertex>,
         vertex_output_sender: Sender<Vertex>,
         blocks_receiver: Receiver<Block>,
+        test_sender : Sender<dag::Dag>,
     ) {
         tokio::spawn(async move {
             let state = State::new(Vertex::genesis(committee.get_nodes_keys()));
@@ -51,6 +54,7 @@ impl Consensus {
                 buffer: vec![],
                 blocks_to_propose: vec![],
                 blocks_receiver,
+                test_sender,
             }
             .run()
             .await;
@@ -78,6 +82,11 @@ impl Consensus {
                 },
                 Some(block) = self.blocks_receiver.recv() => {
                     self.blocks_to_propose.push(block)
+                }
+                else => {
+                    // println!("{}", self.state.dag);
+                    // std::io::stdout().flush().unwrap();
+                    return;
                 }
             }
 
@@ -126,6 +135,7 @@ impl Consensus {
                     .await
                     .unwrap();
             }
+            self.test_sender.send(self.state.dag.clone()).await.unwrap();
         }
     }
 
